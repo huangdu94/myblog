@@ -1,5 +1,5 @@
 ---
-title: Elasticsearch笔记（中）
+title: Elasticsearch笔记（二）
 date: 2020/01/05
 updated: 2020/01/06
 comments: true
@@ -9,7 +9,7 @@ tags:
 - elasticsearch
 - 非关系型数据库
 ---
-## Elasticsearch权威指南笔记（中）
+## Elasticsearch笔记（二）
 
 ### 十一、请求体查询
 

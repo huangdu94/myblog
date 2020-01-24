@@ -1,5 +1,5 @@
 ---
-title: Elasticsearch笔记（上）
+title: Elasticsearch笔记（一）
 date: 2019/12/22
 updated: 2020/01/06
 comments: true
@@ -9,7 +9,7 @@ tags:
 - elasticsearch
 - 非关系型数据库
 ---
-## Elasticsearch权威指南笔记（上）
+## Elasticsearch笔记（一）
 
 ### 一、概述
 + Elasticsearch是一个实时分布式搜索和分析引擎。它让你以前所未有的速度处理大数据成为可能
