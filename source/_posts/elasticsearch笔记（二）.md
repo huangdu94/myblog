@@ -1,7 +1,7 @@
 ---
 title: Elasticsearch笔记（二）
 date: 2020/01/05
-updated: 2020/01/06
+updated: 2020/01/24
 comments: true
 categories: 
 - [笔记, database, elasticsearch]
