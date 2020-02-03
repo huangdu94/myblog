@@ -12,63 +12,41 @@ tags:
 ## Elasticsearch笔记（一）
 
 ### 一、概述
-+ Elasticsearch是一个实时分布式搜索和分析引擎。它让你以前所未有的速度处理大数据成为可能
-+ Elasticsearch是一个基于Apache Lucene(TM)的开源搜索引擎。无论在开源还是专有领域，Lucene可以被认为是迄今为止最先进、性能最好的、功能最全的搜索引擎库
++ Elasticsearch是一个实时分布式搜索和分析引擎，它让你以前所未有的速度处理大数据成为可能
++ Elasticsearch是一个基于Apache Lucene(TM)的开源搜索引擎
++ 无论在开源还是专有领域，Lucene可以被认为是迄今为止最先进、性能最好的、功能最全的搜索引擎库
 
 ### 二、下载与安装
-+ 安装Elasticsearch唯一的要求是安装Java，地址：[java](www.java.com)
-+ 你可以从[elasticsearch](elasticsearch.org/download)下载最新版本的Elasticsearch
-+ `./bin/elasticsearch -d` 后台运行
-+ `curl 'http://localhost:9200/?pretty'` 查看es是否正常运行
-+ `curl -XPOST 'http://localhost:9200/_shutdown'` 关闭es
++ 安装Elasticsearch唯一的要求是安装[java](www.java.com)
++ 你可以下载最新版本的[elasticsearch](elasticsearch.org/download)
++ 后台运行 `./bin/elasticsearch -d`
++ 查看es是否正常运行 `curl 'http://localhost:9200/?pretty'`
++ 关闭es `curl -XPOST 'http://localhost:9200/_shutdown'`
 
 ### 三、Cluster、Node、Index、Type、Document和Field
 + Elastic本质上是一个分布式数据库，允许多台服务器协同工作，每台服务器可以运行多个Elastic实例
-+ 单个Elastic实例称为一个节点(node)。一组节点构成一个集群(cluster)
-+ Elastic会索引所有字段，经过处理后写入一个反向索引(Inverted Index)。查找数据的时候，直接查找该索引。所以，Elastic数据管理的顶层单位就叫做Index(索引)。它是单个数据库的同义词。每个Index(即数据库)的名字必须是小写
-+ Index里面单条的记录称为Document(文档)。许多条Document构成了一个Index。Document使用JSON格式表示
-+ Document可以分组，这种分组就叫做Type，它是虚拟的逻辑分组，用来过滤Document。不同的Type应该有相似的结构(schema)，举例来说，id字段不能在这个组是字符串，在另一个组是数值。这是与关系型数据库的表的一个区别。性质完全不同的数据(比如products和logs)应该存成两个Index，而不是一个Index里面的两个Type(虽然可以做到)
++ 单个Elastic实例称为一个节点(node)，一组节点构成一个集群(cluster)
++ Elastic数据管理的顶层单位就叫做Index(索引)，相当于单个数据库，每个Index(即数据库)的名字必须是小写(Elastic会索引所有字段，经过处理后写入一个反向索引(Inverted Index)，查找数据的时候，直接查找该索引)
++ Index里面单条的记录称为Document(文档)，许多条Document构成了一个Index，Document使用JSON格式表示
++ Document可以分组，这种分组就叫做Type，它是虚拟的逻辑分组，用来过滤Document，不同的Type应该有相似的结构(schema)
++ id字段不能在这个组是字符串，在另一个组是数值，这是与关系型数据库的表的一个区别，性质完全不同的数据(比如products和logs)应该存成两个Index，而不是一个Index里面的两个Type(虽然可以做到)
++ Elastic与关系数据库的对比  
 |关系数据库|数据库|表|行|列|
 |:-:|:-:|:-:|:-:|:-:|
 |Elasticsearch|索引(Index)|类型(Type)|文档(Documents)|字段(Fields)|
 
-### 四、Java API连接ES
-+ Java连接ES(即获得ES的Client)，Elasticsearch创建Client有几种方式。首先在Elasticsearch的配置文件elasticsearch.yml中定义cluster.name
-1. 创建方式一：节点方式创建
-```java
-Node node = NodeBuilder().clusterName("yourclustername").node();
-Client client = node.client();
-```
-2. 创建方式二：指定ip地址创建
-```java
-Client client = TransportClient.builder().build()
-.addTransportAddress(new InetSocketTransportAddress(InetAddress.getByName("host1"), 9300));
-```
-3. 创建方式三：按集群名称创建
-```java
-Settings settings = Settings.settingsBuilder()
-.put("cluster.name", "sojson-application").build();
-Client client = TransportClient.builder().settings(settings).build();
-```
-4. 创建方式四：同一内网Ip段，嗅的方式自己查找，组成集群
-```java
-Settings settings = Settings.settingsBuilder()
-.put("client.transport.sniff", true).build();
-TransportClient client = TransportClient.builder().settings(settings).build();
-```
-
-### 五、与Elasticsearch交互
+### 四、与Elasticsearch交互
 + 基于HTTP协议，以JSON为数据交互格式的RESTful API
 + `curl -X<VERB> <PROTOCOL>://<HOST>/<PORT>?<QUERY_STRING> -d <BODY>`
     + `VERB` http方法:`GET`,`POST`,`PUT`,`HEAD`,`DELETE`
-    + `PROTOCOL` http或https协议(只有在Elasticsearch前面有https代理的时候可用)
-    + `HOST` Elasticsearch集群中的任何一个节点的主机名，如果是在本地的节点，那么就叫localhost
-    + `PORT` Elasticsearch HTTP服务所在的端口，默认为9200
+    + `PROTOCOL` `http`或`https`协议(只有在Elasticsearch前面有https代理的时候可用)
+    + `HOST` Elasticsearch集群中的任何一个节点的主机名，如果是在本地的节点，那么就叫`localhost`
+    + `PORT` Elasticsearch HTTP服务所在的端口，默认为`9200`
     + `QUERY_STRING` 一些可选的查询请求参数，例如`?pretty`参数将使请求返回更加美观易读的JSON数据
     + `BODY` 一个JSON格式的请求主体(如果请求需要的话)
 + linux利用`curl`命令注意`-d`后面的参数部分有些特殊字符需要转义(例`,`)
-+ linux利用`curl`命令，请求体可放在文件中 `curl -XPOST http://localhost:9200/_bulk --data-binary @requests`(bulk API需要，其中requests为请求体文件)
-+ 计算集群中的文档数量(简写形式，省略`PROTOCOL` `HOST` `PORT`) 
++ linux利用`curl`命令，请求体可放在文件中 `curl -XPOST http://localhost:9200/_bulk --data-binary @requests`(bulk API需要，其中`requests`为请求体文件)
++ 简写表示形式，省略`PROTOCOL`,`HOST`,`PORT`(计算集群中的文档数量) 
 ```
 GET /_count
 {
@@ -78,11 +56,11 @@ GET /_count
 }
 ```
 
-### 六、ES简单教程(ES功能概览)
+### 五、ES快速入门
 
 #### 1. 创建三个员工
 ```
-PUT /megacorp/employee/1
+PUT /iflytek/employee/1
 {
   "first_name" : "John",
   "last_name" : "Smith",
@@ -90,17 +68,15 @@ PUT /megacorp/employee/1
   "about" : "I love to go rock climbing",
   "interests": [ "sports", "music" ]
 }
-
-PUT /megacorp/employee/2
+PUT /iflytek/employee/2
 {
   "first_name" : "Jane",
   "last_name" : "Smith",
   "age" : 32,
   "about" : "I like to collect rock albums",
   "interests": [ "music" ]
-} 
-    
-PUT /megacorp/employee/3
+}
+PUT /iflytek/employee/3
 {
   "first_name" : "Douglas",
   "last_name" : "Fir",
@@ -111,20 +87,20 @@ PUT /megacorp/employee/3
 ```
 
 #### 2. 根据id操作员工信息
-+ `GET /megacorp/employee/1` 查
-+ `DELETE /megacorp/employee/1` 删
-+ `PUT /megacorp/employee/1` 改
-+ `HEAD /megacorp/employee/1` 检查某文档是否存在(`curl`使用时加`-i`参数，信息在响应头中)
++ `GET /iflytek/employee/1` 查
++ `DELETE /iflytek/employee/1` 删
++ `PUT /iflytek/employee/1` 改
++ `HEAD /iflytek/employee/1` 检查某文档是否存在(`curl`使用时加`-i`参数，信息在响应头中)
 
 #### 3. 简单搜索
-+ `GET /megacorp/employee/_search` 默认情况下搜索会返回前10个结果
-+ `GET /megacorp/employee/_search?q=last_name:Smith` 查询字符串(query string)搜索，轻量级搜索
-+ `GET /megacorp/employee/_search?q=age[30 TO 60]&sort=age:desc&from=0&size=2` 查询年龄为30-60之间，降序排序，分页查询
++ `GET /iflytek/employee/_search` 默认情况下搜索会返回前10个结果
++ `GET /iflytek/employee/_search?q=last_name:Smith` 查询字符串(query string)搜索，轻量级搜索
++ `GET /iflytek/employee/_search?q=age[30 TO 60]&sort=age:desc&from=0&size=2` 查询年龄为30-60之间，降序排序，分页查询
 
 #### 4. 使用DSL(Domain Specific Language,特定领域语言)语句查询
 1. 搜索指定字段值
 ```
-GET /megacorp/employee/_search
+GET /iflytek/employee/_search
 {
   "query" : {
     "match" : {
@@ -134,10 +110,10 @@ GET /megacorp/employee/_search
 }
 ```
 2. 搜索范围
-    + <1>这部分查询属于区间过滤器(range filter)，它用于查找所有年龄大于30岁的数据，gt为"greater than"的缩写
-    + <2>这部分查询与之前的match语句(query)一致
+    + <1>查询属于区间过滤器(range filter)，`gt`为"greater than"的缩写
+    + <2>查询与之前的match语句(query)一致
 ```
-GET /megacorp/employee/_search
+GET /iflytek/employee/_search
 {
   "query" : {
     "filtered" : {
@@ -157,7 +133,7 @@ GET /megacorp/employee/_search
 ```
 3. 全文搜索
 ```
-GET /megacorp/employee/_search
+GET /iflytek/employee/_search
 {
   "query" : {
     "match" : {
@@ -168,7 +144,7 @@ GET /megacorp/employee/_search
 ```
 4. 短语搜索(比全文搜索更具有针对性)
 ```
-GET /megacorp/employee/_search
+GET /iflytek/employee/_search
 {
   "query" : {
     "match_phrase" : {
@@ -179,7 +155,7 @@ GET /megacorp/employee/_search
 ```
 5. 高亮搜索结果
 ```
-GET /megacorp/employee/_search
+GET /iflytek/employee/_search
 {
   "query" : {
     "match_phrase" : {
@@ -195,7 +171,7 @@ GET /megacorp/employee/_search
 ```
 6. 分析，聚合查询
 ```
-GET /megacorp/employee/_search
+GET /iflytek/employee/_search
 {
   "aggs": {
     "all_interests": {
@@ -206,7 +182,7 @@ GET /megacorp/employee/_search
 ```
 7. 聚合和精确查询组合
 ```
-GET /megacorp/employee/_search
+GET /iflytek/employee/_search
 {
   "query": {
     "match": {
@@ -224,7 +200,7 @@ GET /megacorp/employee/_search
 ```
 8. 分级汇总(统计每种兴趣下职员的平均年龄)
 ```
-GET /megacorp/employee/_search
+GET /iflytek/employee/_search
 {
   "aggs" : {
     "all_interests" : {
@@ -243,7 +219,7 @@ GET /megacorp/employee/_search
 }
 ```
 
-### 七、分布式集群及分布式存储
+### 六、分布式集群及分布式存储
 + 集群健康 `GET /_cluster/health`
 + 创建索引(设置主分片数`number_of_shards`和复制分片数`number_of_replicas`)
 ```
@@ -257,7 +233,7 @@ PUT /website
 ```
 1. `routing`参数
     + `shard = hash(routing) % number_of_primary_shards` 计算文档属于哪个分片
-    + `get` `index` `delete` `bulk` `update` `mget` 都接收一个`routing`参数，它用来自定义文档到分片的映射
+    + `get`,`index`,`delete`,`bulk`,`update`,`mget`都可接收一个`routing`参数，它用来自定义文档到分片的映射
 2. `replication`参数
     + `replication`复制默认的值是`sync`这将导致主分片得到复制分片的成功响应后才返回
     + 如果你设置`replication`为`async`，请求在主分片上被执行后就会返回给客户端，它依旧会转发请求给复制节点，但你将不知道复制节点成功与否
@@ -267,13 +243,21 @@ PUT /website
     + 规定的数量计算公式`int( (primary + number_of_replicas) / 2 ) + 1`
 4. `timeout`参数
     + 当分片副本不足时Elasticsearch会等待更多的分片出现，默认等待一分钟
-    + 可以设置timeout 参数让它终止的更早：100表示100毫秒，30s表示30秒
-+ update API接受`routing` `replication` `consistency`和`timout`参数
-+ mget API `routing`参数可以被docs中的每个文档设置
-+ bulk API还可以在最上层使用`replication`和`consistency`参数，`routing`参数则在每个请求的元数据中使用
-+ 切换主分片节点
-    1. `curl -XPUT 10.3.172.112:9200/_cluster/settings -d'{"transient":{"cluster.routing.allocation.enable":"none"}}'`
-    2.  
+    + 可以设置`timeout`参数让它终止的更早，`100`表示100毫秒，`30s`表示30秒
++ `update`API接受`routing`,`replication`,`consistency`和`timout`参数
++ `mget`API的`routing`参数可以被docs中的每个文档设置
++ `bulk`API还可以在最上层使用`replication`和`consistency`参数，`routing`参数则在每个请求的元数据中使用
++ 手动分配分片所在节点的方式
+    1. 关闭分片自动分配所在节点(改为`all`开启)
+    ```
+    PUT 10.3.172.112:9200/_cluster/settings
+    {
+      "transient":{
+	    "cluster.routing.allocation.enable":"none"
+	  }
+	}
+    ```
+    2. 移动指定分片到指定节点  
     ```
     POST /_cluster/reroute
     {
@@ -289,19 +273,18 @@ PUT /website
       ]
     }
     ```
-    3. `curl -XPUT 10.3.172.112:9200/_cluster/settings -d'{"transient":{"cluster.routing.allocation.enable":"all"}}'`
     
-### 八、文档相关操作
+### 七、文档相关操作
 
-#### 1. 文档
+#### 1. 文档的元数据
 + 一个文档不只有数据，它还包含了元数据(metadata):
 + `_index` 文档存储的地方
 + `_type` 文档代表的对象的类(每个类型type都有自己的映射mapping或者结构定义， 就像传统数据库表中的列一样)
 + `_id` 文档的唯一标识
-+ 其它元数据(例: `_version`)
++ 其它元数据(例版本号`_version`)
 
-#### 2. 索引一个文档
-+ 指定id  
+#### 2. 新增文档
++ 指定id新增  
 ```
 PUT /website/blog/123
 {
@@ -310,7 +293,7 @@ PUT /website/blog/123
   "date": "2014/01/01"
 }
 ```
-+ 自增id
++ 自增id新增
 ```
 POST /website/blog/
 {
@@ -537,7 +520,7 @@ POST /website/log/_bulk
 + 最佳大小并不是一个固定的数字。它完全取决于你的硬件、你文档的大小和复杂度以及索引和搜索的负载
 + 一个好的批次最好保持在5-15MB大小间
 
-### 九、搜索(基本的工具)
+### 八、搜索(基本的工具)
 + 为了充分挖掘Elasticsearch的潜力，需要理解以下三个概念：
     1. Mapping: 数据在每个字段中的解释说明
     2. Analysis: 全文是如何处理的可以被搜索的
@@ -574,7 +557,7 @@ POST /website/log/_bulk
         + `+name:(mary john) +date:>2014-09-10 +(aggregations geo)` 
         + `GET /_search?q=%2Bname%3A(mary+john)+%2Bdate%3A%3E2014-09-10+%2B(aggregations+geo)`
 
-### 十、映射及分析
+### 九、映射及分析
 
 #### 1. Elasticsearch为对字段类型进行猜测，动态生成了字段和类型的映射关系。默认字段`_all`是`string`类型
 
@@ -585,7 +568,7 @@ POST /website/log/_bulk
 4. 为了找到确实存在于索引中的词，索引文本和查询字符串都要标准化为相同的形式，这个表征化和标准化的过程叫做分词(analysis)
 
 #### 3. 分析和分析器
-+ `GET /megacorp/employee/1/_termvectors?fields=about`(查看指定文档指定字段分词情况)
++ `GET /iflytek/employee/1/_termvectors?fields=about`(查看指定文档指定字段分词情况)
 + 一个分析器(analyzer)只是一个包装用于将三个功能放到一个包里
     1. 字符串经过字符过滤器(character filter)，它们的工作是在表征化前处理字符串。字符过滤器能够去除HTML标记，或者转换 "&" 为 "and" 
     2. 分词器(tokenizer)将字符串表征化为独立的词(断词)。一个简单的分词器(tokenizer)可以根据空格或逗号将单词分开
@@ -600,7 +583,7 @@ POST /website/log/_bulk
     + 指定分词器分词
     `POST /_analyze?analyzer=standard {"text": "text content"}`
     + 使用指定字段分词器分词
-    `POST /megacorp/_analyze?field=about {"text": "text content"}`
+    `POST /iflytek/_analyze?field=about {"text": "text content"}`
 + 指定分析器 当Elasticsearch在你的文档中探测到一个新的字符串字段，它将自动设置它为全文string字段并用standard分析器分析(可以通过映射`mapping`设置)
 
 #### 4. 映射
