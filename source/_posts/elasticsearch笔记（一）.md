@@ -319,7 +319,7 @@ PUT /website/blog/123
   "text": "I am starting to get the hang of this...",
   "date": "2014/01/01"
 }
-``` 
+```
 
 #### 5. 创建一个新文档
 + 使用自增id保证文档新增而不是覆盖原来的
