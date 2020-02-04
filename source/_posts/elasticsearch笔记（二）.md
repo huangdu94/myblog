@@ -11,7 +11,7 @@ tags:
 ---
 ## Elasticsearch笔记（二）
 
-### 十、请求体查询
+### 六、请求体查询
 
 #### 1. 请求体查询
 + 简单查询语句(lite)是一种有效的命令行adhoc查询。更复杂的查询，必须使用请求体查询(request bodysearch )API
@@ -38,7 +38,7 @@ tags:
 + 然而，因为携带交互数据的`GET`请求并不被广泛支持，所以search API同样支持`POST`请求，这个原理同样应用于其他携带交互数据的GET API请求中。
 + 相对于神秘的查询字符串方法，请求体查询允许我们使用结构化查询Query DSL(Query Domain Specific Language)
 
-#### 2. 结构化查询
+#### 2. 查询表达式
 + 结构化查询是一种灵活的，多表现形式的查询语言，Elasticsearch在一个简单的JSON接口中用结构化查询来展现Lucene绝大多数能力
 + 使用结构化查询，你需要传递`query`参数
 ```
@@ -56,7 +56,7 @@ GET /_search
   }
 }
 ```
-+ 查询子句一般结构及示例
++ 查询子句一般结构
 ```
 {
   QUERY_NAME: {
@@ -73,6 +73,7 @@ GET /_search
   }
 }
 ```
++ 查询子句示例
 ```
 GET /_search
 {
@@ -117,14 +118,14 @@ GET /_search
 #### 3. 查询与过滤
 + 两种结构化语句：结构化查询(Query DSL)和结构化过滤(Filter DSL)
 + 过滤语句会询问每个文档的字段值是否包含着特定值
-+ 查询语句与过滤语句相似，但问法不同，查询语句会询问每个文档的字段值与特定值的匹配程度如何
++ 查询语句会询问每个文档的字段值与特定值的匹配程度如何
 + 原则上来说，使用查询语句做全文本搜索或其他需要进行相关性评分的时候，剩下的全部用过滤语句
 + 查询语句和过滤语句可以放在各自的上下文中，在ElasticSearch API中我们会看到许多带有`query`或`filter`的语句
 + 这些语句既可以包含单条`query`语句，也可以包含一条`filter`子句。这些语句需要首先创建一个`query`或`filter`的上下文关系
 + 复合查询语句可以加入其他查询子句，复合过滤语句也可以加入其他过滤子句。通常情况下，一条查询语句需要过滤语句的辅助，全文本搜索除外
 + 查询语句可以包含过滤子句，反之亦然。以便于我们切换`query`或`filter`的上下文。这就要求我们在读懂需求的同时构造正确有效的语句
 
-#### 4. 最重要的查询过滤语句
+#### 4. 最重要的查询
 1. `term`过滤  
 `term`主要用于精确匹配哪些值，比如数字、日期、布尔值或`not_analyzed`的字符串(未经分析的文本数据类型)
 ```
@@ -199,8 +200,6 @@ GET /_search
     "tweet": "About Search"
   }
 }
-```
-```
 { "match": { "age": 26 }}
 { "match": { "date": "2014-09-01" }}
 { "match": { "public": true }}
@@ -292,7 +291,9 @@ GET /_search
   }
 }
 ```
-5. validate API可以验证一条查询语句是否合法
+
+#### 6. 验证查询
+1. validate API可以验证一条查询语句是否合法
 ```
 GET /gb/tweet/_validate/query
 {
@@ -303,7 +304,7 @@ GET /gb/tweet/_validate/query
   }
 }
 ```
-6. 想知道语句非法的具体错误信息，需要加上`explain`参数
+2. 想知道语句非法的具体错误信息，需要加上`explain`参数
 ```
 GET /gb/tweet/_validate/query?explain
 {
@@ -315,7 +316,7 @@ GET /gb/tweet/_validate/query?explain
 }
 ```
 
-### 十一、排序
+### 七、排序与相关性
 
 #### 1. 排序方式
 + 默认情况下，结果集会按照相关性进行排序(相关性分值会用`_score`字段来给出一个浮点型的数值，默认情况下，结果集以`_score`进行倒序排列)
@@ -334,6 +335,7 @@ GET /_search
   "sort": { "date": { "order": "desc" }}
 }
 ```
++ 排序结果
 ```
 hits" : {
   "total" : 6,
@@ -369,8 +371,8 @@ GET /_search
   ]
 }
 ```
-+ 字符查询也支持自定义排序，在查询字符串使用`sort`参数就可以`GET /_search?sort=date:desc&sort=_score&q=text`
-+ 对于数字和日期，可以从多个值中取出一个来进行排序，你可以使用`min`,`max`,`avg`或`sum`这些模式。比说你可以在`dates`字段中用最早的日期来进行排序
++ 字符查询也支持相关性排序，在查询字符串使用`sort`参数就可以`GET /_search?sort=date:desc&sort=_score&q=text`
++ 对于数字和日期数组，可以从多个值中取出一个来进行排序，你可以使用`min`,`max`,`avg`或`sum`这些模式。比说你可以在`dates`字段中用最早的日期来进行排序
 ```
 "sort": {
   "dates": {
@@ -505,53 +507,57 @@ GET /us/tweet/12/_explain
 + 毫无疑问，这会消耗掉很多内存，尤其是大量的字符串数据(string字段可能包含很多不同的值，比如邮件内容)
 + 值得庆幸的是，内存不足是可以通过横向扩展解决的，我们可以增加更多的节点到集群
 
-### 十二、分布式搜索的执行方式
+### 八、执行分布式检索
+
+#### 1. 查询和取回阶段
 + 一个CRUD操作(create read update delete)只处理一个单独的文档。文档的唯一性由`_index`,`_type`和`routing-value`(通常默认是该文档的`_id`)的组合来确定。这意味着我们可以准确知道集群中的哪个分片持有这个文档
 + 由于不知道哪个文档会匹配查询(文档可能存放在集群中的任意分片上)，所以搜索需要一个更复杂的模型。一个搜索不得不通过查询每一个我们感兴趣的索引的分片副本，来看是否含有任何匹配的文档
 + 但是，找到所有匹配的文档只完成了这件事的一半。在搜索(search)API返回一页结果前，来自多个分片的结果必须被组合放到一个有序列表中。因此，搜索的执行过程分两个阶段，称为查询然后取回(query then fetch)
-+ 搜索选项(一些查询字符串可选参数能够影响搜索过程)
-    1. `preference`(偏爱)  
-    `preference`参数允许你控制使用哪个分片或节点来处理搜索请求(接受如下一些参数`_primary` `_primary_first` `_local` `_only_node:xyz` `_prefer_node:xyz` `_shards:2,3`)。然而通常最有用的值是一些随机字符串，它们可以避免结果震荡问题(the bouncing results problem)
-    2. `timeout`(超时)  
-    通常，协调节点会等待接收所有分片的回答。如果有一个节点遇到问题，它会拖慢整个搜索请求。`timeout`参数告诉协调节点最多等待多久，就可以放弃等待而将已有结果返回 
-    3. `routing`(路由选择)  
-    在路由值那节里，我们解释了如何在建立索引时提供一个自定义的`routing`参数来保证所有相关的document(如属于单个用户的document)被存放在一个单独的分片中。在搜索时，你可以指定一个或多个`routing`值来限制只搜索那些分片而不是搜索`index`里的全部分片。`GET /_search?routing=user_1,user2`
-    4. search_type(搜索类型)  
-    虽然`query_then_fetch`是默认的搜索类型，但也可以根据特定目的指定其它的搜索类型，例如：`GET /_search?search_type=count`
-        + `count`  
-        `count`(计数)搜索类型只有一个query(查询)的阶段。当不需要搜索结果只需要知道满足查询的document的数量时，可以使用这个查询类型
-        + `query_and_fetch`  
-        `query_and_fetch`(查询并且取回)搜索类型将查询和取回阶段合并成一个步骤。这是一个内部优化选项，当搜索请求的目标只是一个分片时可以使用，例如指定了`routing`(路由选择)值时。虽然你可以手动选择使用这个搜索类型，但是这么做基本上不会有什么效果
-        + `dfs_query_then_fetch`和`dfs_query_and_fetch`  
-        dfs搜索类型有一个预查询的阶段，它会从全部相关的分片里取回项目频数来计算全局的项目频数。我们将在relevance-isbroken(相关性被破坏)里进一步讨论这个
-        + `scan`  
-        scan(扫描)搜索类型是和scroll(滚屏)API连在一起使用的，可以高效地取回巨大数量的结果。它是通过禁用排序来实现的
-+ 扫描和滚屏(scan-and-scroll)  
-`scan`(扫描)搜索类型是和`scroll`(滚屏)API一起使用来从Elasticsearch里高效地取回巨大数量的结果而不需要付出深分页的代价
-    1. 为了使用scan-and-scroll(扫描和滚屏)，需要执行一个搜索请求，将`search_type`设置成`scan`，并且传递一个`scroll`参数来告诉Elasticsearch滚屏应该持续多长时间
-    ```
-    GET /old_index/_search?search_type=scan&scroll=1m <1>保持滚屏开启1分钟
-    {
-      "query": { "match_all": {}},
-      "size": 1000
-    }
-    ```
-    2. 这个请求的应答没有包含任何命中的结果，但是包含了一个Base-64编码的`_scroll_id`(滚屏id)字符串。现在我们可以将`_scroll_id`传递给`_search/scroll`末端来获取第一批结果
-    ```
-    GET /_search/scroll?scroll=1m <1>保持滚屏开启另一分钟
-    <2>_scroll_id 可以在body或者URL里传递，也可以被当做查询参数传递
-    {
-      "scroll_id": "c2NhbjszOzIzOlp6OUZtMTZSU0J1ZDJmSnVxcmk1b0E7MjE6aFI5V0hUV0tSQUs0WVo3UjdHWUxJdzsyNjp1VHpJaFk5UlN6T1dNenpVWGN2RmFROzE7dG90YWxfaGl0czoxNTs="
-    }
-    ```
-    3. 滚屏请求也会返回一个新的`_scroll_id`。每次做下一个滚屏请求时，必须传递前一次请求返回的`_scroll_id`
-    + 注意，要再次指定`?scroll=1m`。滚屏的终止时间会在我们每次执行滚屏请求时刷新，所以他只需要给我们足够的时间来处理当前批次的结果而不是所有的匹配查询的document。这个滚屏请求的应答包含了第一批次的结果
-    + 虽然指定了一个1000的`size`，但是获得了更多的document。当扫描时，size被应用到每一个分片上，所以我们在每个批次里最多或获得`size * number_of_primary_shards`(`size*主分片数`)个document
-    + 如果没有更多的命中结果返回，就处理完了所有的命中匹配的document
-    
-### 十三、索引管理
 
-#### 1. 创建删除
+#### 2. 搜索选项
+1. `preference`(偏爱)  
+`preference`参数允许你控制使用哪个分片或节点来处理搜索请求(接受如下一些参数`_primary` `_primary_first` `_local` `_only_node:xyz` `_prefer_node:xyz` `_shards:2,3`)。然而通常最有用的值是一些随机字符串，它们可以避免结果震荡问题(the bouncing results problem)
+2. `timeout`(超时)  
+通常，协调节点会等待接收所有分片的回答。如果有一个节点遇到问题，它会拖慢整个搜索请求。`timeout`参数告诉协调节点最多等待多久，就可以放弃等待而将已有结果返回 
+3. `routing`(路由选择)  
+在路由值那节里，我们解释了如何在建立索引时提供一个自定义的`routing`参数来保证所有相关的document(如属于单个用户的document)被存放在一个单独的分片中。在搜索时，你可以指定一个或多个`routing`值来限制只搜索那些分片而不是搜索`index`里的全部分片。`GET /_search?routing=user_1,user2`
+4. search_type(搜索类型)  
+虽然`query_then_fetch`是默认的搜索类型，但也可以根据特定目的指定其它的搜索类型，例如：`GET /_search?search_type=count`
+    + `count`  
+    `count`(计数)搜索类型只有一个query(查询)的阶段。当不需要搜索结果只需要知道满足查询的document的数量时，可以使用这个查询类型
+    + `query_and_fetch`  
+    `query_and_fetch`(查询并且取回)搜索类型将查询和取回阶段合并成一个步骤。这是一个内部优化选项，当搜索请求的目标只是一个分片时可以使用，例如指定了`routing`(路由选择)值时。虽然你可以手动选择使用这个搜索类型，但是这么做基本上不会有什么效果
+    + `dfs_query_then_fetch`和`dfs_query_and_fetch`  
+    dfs搜索类型有一个预查询的阶段，它会从全部相关的分片里取回项目频数来计算全局的项目频数。我们将在relevance-isbroken(相关性被破坏)里进一步讨论这个
+    + `scan`  
+    scan(扫描)搜索类型是和scroll(滚屏)API连在一起使用的，可以高效地取回巨大数量的结果。它是通过禁用排序来实现的
+
+#### 3. 扫描和滚屏(scan-and-scroll)  
++ `scan`(扫描)搜索类型是和`scroll`(滚屏)API一起使用来从Elasticsearch里高效地取回巨大数量的结果而不需要付出深分页的代价
+1. 为了使用scan-and-scroll(扫描和滚屏)，需要执行一个搜索请求，将`search_type`设置成`scan`，并且传递一个`scroll`参数来告诉Elasticsearch滚屏应该持续多长时间
+```
+GET /old_index/_search?search_type=scan&scroll=1m <1>保持滚屏开启1分钟
+{
+  "query": { "match_all": {}},
+  "size": 1000
+}
+```
+2. 这个请求的应答没有包含任何命中的结果，但是包含了一个Base-64编码的`_scroll_id`(滚屏id)字符串。现在我们可以将`_scroll_id`传递给`_search/scroll`末端来获取第一批结果
+```
+GET /_search/scroll?scroll=1m <1>保持滚屏开启另一分钟
+<2>_scroll_id 可以在body或者URL里传递，也可以被当做查询参数传递
+{
+  "scroll_id": "c2NhbjszOzIzOlp6OUZtMTZSU0J1ZDJmSnVxcmk1b0E7MjE6aFI5V0hUV0tSQUs0WVo3UjdHWUxJdzsyNjp1VHpJaFk5UlN6T1dNenpVWGN2RmFROzE7dG90YWxfaGl0czoxNTs="
+}
+```
+3. 滚屏请求也会返回一个新的`_scroll_id`。每次做下一个滚屏请求时，必须传递前一次请求返回的`_scroll_id`
++ 注意，要再次指定`?scroll=1m`。滚屏的终止时间会在我们每次执行滚屏请求时刷新，所以他只需要给我们足够的时间来处理当前批次的结果而不是所有的匹配查询的document。这个滚屏请求的应答包含了第一批次的结果
++ 虽然指定了一个1000的`size`，但是获得了更多的document。当扫描时，size被应用到每一个分片上，所以我们在每个批次里最多或获得`size * number_of_primary_shards`(`size*主分片数`)个document
++ 如果没有更多的命中结果返回，就处理完了所有的命中匹配的document
+    
+### 九、索引管理
+
+#### 1. 创建删除索引
 1. 创建索引
 ```
 PUT /my_index
@@ -617,7 +623,7 @@ PUT /spanish_docs
 GET /spanish_docs/_analyze?analyzer=es_std
 El veloz zorro marrón
 ```
-6. 下面简化的结果中显示停用词`El`被正确的删除了
+6. 下面简化的结果中显示停用词`El`被正确的删除了  
 ```
 {
   "tokens" : [
@@ -762,7 +768,7 @@ PUT /my_index/_mapping/my_type
     + `type`：字段的数据类型，例如string和date
     + `index`：字段是否应当被当成全文来搜索(analyzed)，或被当成一个准确的值(not_analyzed)，还是完全不可被搜索(no)
     + `analyzer`：确定在索引和或搜索时全文字段使用的分析器
-	
+    
 #### 7. 元数据中的source字段
 1. 默认情况下，Elasticsearch用JSON字符串来表示文档主体保存在`_source`字段中。像其他保存的字段一样，`_source`字段也会在写入硬盘前压缩
 2. 可以用下面的映射禁用`_source`字段
@@ -827,10 +833,10 @@ PUT /my_index/my_type/_mapping
 
 #### 9. 元数据中的id字段
 1. 文档唯一标识由四个元数据字段组成
-	+ `_id`：文档的字符串ID
-	+ `_type`：文档的类型名
-	+ `_index`：文档所在的索引
-	+ `_uid`：`_type`和`_id`连接成的`type#id`
+    + `_id`：文档的字符串ID
+    + `_type`：文档的类型名
+    + `_index`：文档所在的索引
+    + `_uid`：`_type`和`_id`连接成的`type#id`
 2. `_id`字段有一个你可能用得到的设置：`path`设置告诉Elasticsearch它需要从文档本身的哪个字段中生成`_id`
 ```
 PUT /my_index
@@ -855,9 +861,9 @@ PUT /my_index
 #### 10. 动态映射
 1. 当Elasticsearch遇到一个未知的字段时，它通过动态映射来确定字段的数据类型且自动将该字段加到类型映射中
 2. 可以通过`dynamic`设置来控制这些行为，它接受下面几个选项
-	+ `true`：自动添加字段(默认)
-	+ `false`：忽略字段
-	+ `strict`：当遇到未知字段时抛出异常
+    + `true`：自动添加字段(默认)
+    + `false`：忽略字段
+    + `strict`：当遇到未知字段时抛出异常
 3. `dynamic`设置可以用在根对象或任何`object`对象上。你可以将`dynamic`默认设置为`strict`，而在特定内部对象上启用它
 ```
 PUT /my_index
@@ -978,11 +984,12 @@ GET /old_index/_search?search_type=scan&scroll=1m
 PUT /my_index_v1
 PUT /my_index_v1/_alias/my_index
 ```
-4. 检测这个别名指向哪个索引，或哪些别名指向这个索引(两者都将返回下列值)
+4. 检测这个别名指向哪个索引，或哪些别名指向这个索引
 ```
 GET /*/_alias/my_index
 GET /my_index_v1/_alias/*
 ```
+5. 两者都将返回下列值
 ```
 {
   "my_index_v1" : {
@@ -992,7 +999,7 @@ GET /my_index_v1/_alias/*
   }
 }
 ```
-5. 然后，我们决定修改索引中一个字段的映射。当然我们不能修改现存的映射，索引我们需要重新索引数据。首先，我们创建有新的映射的索引`my_index_v2`
+6. 然后，我们决定修改索引中一个字段的映射。当然我们不能修改现存的映射，索引我们需要重新索引数据。首先，我们创建有新的映射的索引`my_index_v2`
 ```
 PUT /my_index_v2
 {
@@ -1008,7 +1015,7 @@ PUT /my_index_v2
   }
 }
 ```
-6. 然后我们从将数据从`my_index_v1`迁移到`my_index_v2`(原子化操作)
+7. 然后我们从将数据从`my_index_v1`迁移到`my_index_v2`(原子化操作)
 ```
 POST /_aliases
 {
@@ -1018,4 +1025,4 @@ POST /_aliases
   ]
 }
 ```
-7. 在应用中使用别名而不是索引。然后你就可以在任何时候重建索引。别名的开销很小，应当广泛使用
+8. 在应用中使用别名而不是索引。然后你就可以在任何时候重建索引。别名的开销很小，应当广泛使用

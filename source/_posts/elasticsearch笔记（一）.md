@@ -1,7 +1,7 @@
 ---
 title: Elasticsearch笔记（一）
 date: 2019/12/22
-updated: 2020/01/24
+updated: 2020/02/04
 comments: true
 categories: 
 - [笔记, database, elasticsearch]
@@ -11,31 +11,21 @@ tags:
 ---
 ## Elasticsearch笔记（一）
 
-### 一、概述
+### 一、Elasticsearch概述
+
+#### 1. Elasticsearch介绍
 + Elasticsearch是一个实时分布式搜索和分析引擎，它让你以前所未有的速度处理大数据成为可能
 + Elasticsearch是一个基于Apache Lucene(TM)的开源搜索引擎
 + 无论在开源还是专有领域，Lucene可以被认为是迄今为止最先进、性能最好的、功能最全的搜索引擎库
 
-### 二、下载与安装
+#### 2. 安装并运行Elasticsearch
 + 安装Elasticsearch唯一的要求是安装[java](www.java.com)
 + 你可以下载最新版本的[elasticsearch](elasticsearch.org/download)
 + 后台运行 `./bin/elasticsearch -d`
 + 查看es是否正常运行 `curl 'http://localhost:9200/?pretty'`
 + 关闭es `curl -XPOST 'http://localhost:9200/_shutdown'`
 
-### 三、Cluster、Node、Index、Type、Document和Field
-+ Elastic本质上是一个分布式数据库，允许多台服务器协同工作，每台服务器可以运行多个Elastic实例
-+ 单个Elastic实例称为一个节点(node)，一组节点构成一个集群(cluster)
-+ Elastic数据管理的顶层单位就叫做Index(索引)，相当于单个数据库，每个Index(即数据库)的名字必须是小写(Elastic会索引所有字段，经过处理后写入一个反向索引(Inverted Index)，查找数据的时候，直接查找该索引)
-+ Index里面单条的记录称为Document(文档)，许多条Document构成了一个Index，Document使用JSON格式表示
-+ Document可以分组，这种分组就叫做Type，它是虚拟的逻辑分组，用来过滤Document，不同的Type应该有相似的结构(schema)
-+ id字段不能在这个组是字符串，在另一个组是数值，这是与关系型数据库的表的一个区别，性质完全不同的数据(比如products和logs)应该存成两个Index，而不是一个Index里面的两个Type(虽然可以做到)
-+ Elastic与关系数据库的对比  
-|关系数据库|数据库|表|行|列|
-|:-:|:-:|:-:|:-:|:-:|
-|Elasticsearch|索引(Index)|类型(Type)|文档(Documents)|字段(Fields)|
-
-### 四、与Elasticsearch交互
+#### 3. 和Elasticsearch交互
 + 基于HTTP协议，以JSON为数据交互格式的RESTful API
 + `curl -X<VERB> <PROTOCOL>://<HOST>/<PORT>?<QUERY_STRING> -d <BODY>`
     + `VERB` http方法:`GET`,`POST`,`PUT`,`HEAD`,`DELETE`
@@ -56,9 +46,20 @@ GET /_count
 }
 ```
 
-### 五、ES快速入门
+#### 4. 面向文档
++ Elastic本质上是一个分布式数据库，允许多台服务器协同工作，每台服务器可以运行多个Elastic实例
++ 单个Elastic实例称为一个节点(node)，一组节点构成一个集群(cluster)
++ Elastic数据管理的顶层单位就叫做Index(索引)，相当于单个数据库，每个Index(即数据库)的名字必须是小写(Elastic会索引所有字段，经过处理后写入一个反向索引(Inverted Index)，查找数据的时候，直接查找该索引)
++ Index里面单条的记录称为Document(文档)，许多条Document构成了一个Index，Document使用JSON格式表示
++ Document可以分组，这种分组就叫做Type，它是虚拟的逻辑分组，用来过滤Document，不同的Type应该有相似的结构(schema)
++ id字段不能在这个组是字符串，在另一个组是数值，这是与关系型数据库的表的一个区别，性质完全不同的数据(比如products和logs)应该存成两个Index，而不是一个Index里面的两个Type(虽然可以做到)
++ Elastic与关系数据库的对比  
+|关系数据库|数据库|表|行|列|
+|:-:|:-:|:-:|:-:|:-:|
+|Elasticsearch|索引(Index)|类型(Type)|文档(Documents)|字段(Fields)|
 
-#### 1. 创建三个员工
+#### 5. Elasticsearch简单教程
+1. 索引员工文档
 ```
 PUT /iflytek/employee/1
 {
@@ -85,141 +86,142 @@ PUT /iflytek/employee/3
   "interests": [ "forestry" ]
 }
 ```
-
-#### 2. 根据id操作员工信息
-+ `GET /iflytek/employee/1` 查
-+ `DELETE /iflytek/employee/1` 删
-+ `PUT /iflytek/employee/1` 改
-+ `HEAD /iflytek/employee/1` 检查某文档是否存在(`curl`使用时加`-i`参数，信息在响应头中)
-
-#### 3. 简单搜索
-+ `GET /iflytek/employee/_search` 默认情况下搜索会返回前10个结果
-+ `GET /iflytek/employee/_search?q=last_name:Smith` 查询字符串(query string)搜索，轻量级搜索
-+ `GET /iflytek/employee/_search?q=age[30 TO 60]&sort=age:desc&from=0&size=2` 查询年龄为30-60之间，降序排序，分页查询
-
-#### 4. 使用DSL(Domain Specific Language,特定领域语言)语句查询
-1. 搜索指定字段值
-```
-GET /iflytek/employee/_search
-{
-  "query" : {
-    "match" : {
-      "last_name" : "Smith"
-    }
-  }
-}
-```
-2. 搜索范围
-    + <1>查询属于区间过滤器(range filter)，`gt`为"greater than"的缩写
-    + <2>查询与之前的match语句(query)一致
-```
-GET /iflytek/employee/_search
-{
-  "query" : {
-    "filtered" : {
-      "filter" : {
-        "range" : {
-          "age" : { "gt" : 30 } <1>
-        }
-      },
+2. 根据id操作员工文档
+    + `GET /iflytek/employee/1` 查
+    + `DELETE /iflytek/employee/1` 删
+    + `PUT /iflytek/employee/1` 改
+    + `HEAD /iflytek/employee/1` 检查某文档是否存在(`curl`使用时加`-i`参数，信息在响应头中)
+3. 轻量搜索
+    + `GET /iflytek/employee/_search` 默认情况下搜索会返回前10个结果
+    + `GET /iflytek/employee/_search?q=last_name:Smith` 查询字符串(query string)搜索，轻量级搜索
+    + `GET /iflytek/employee/_search?q=age[30 TO 60]&sort=age:desc&from=0&size=2` 查询年龄为30-60之间，降序排序，分页查询
+4. 使用查询表达式搜索(DSL,Domain Specific Language,特定领域语言)
+    + 搜索指定字段值
+    ```
+    GET /iflytek/employee/_search
+    {
       "query" : {
         "match" : {
-          "last_name" : "smith" <2>
+          "last_name" : "Smith"
         }
       }
     }
-  }
-}
-```
-3. 全文搜索
-```
-GET /iflytek/employee/_search
-{
-  "query" : {
-    "match" : {
-      "about" : "rock climbing"
-    }
-  }
-}
-```
-4. 短语搜索(比全文搜索更具有针对性)
-```
-GET /iflytek/employee/_search
-{
-  "query" : {
-    "match_phrase" : {
-      "about" : "rock climbing"
-    }
-  }
-}
-```
-5. 高亮搜索结果
-```
-GET /iflytek/employee/_search
-{
-  "query" : {
-    "match_phrase" : {
-      "about" : "rock climbing"
-    }
-  },
-  "highlight": {
-    "fields" : {
-      "about" : {}
-    }
-  }
-}
-```
-6. 分析，聚合查询
-```
-GET /iflytek/employee/_search
-{
-  "aggs": {
-    "all_interests": {
-      "terms": { "field": "interests" }
-    }
-  }
-}
-```
-7. 聚合和精确查询组合
-```
-GET /iflytek/employee/_search
-{
-  "query": {
-    "match": {
-      "last_name": "smith"
-    }
-  },
-  "aggs": {
-    "all_interests": {
-      "terms": {
-        "field": "interests"
-      }
-    }
-  }
-}
-```
-8. 分级汇总(统计每种兴趣下职员的平均年龄)
-```
-GET /iflytek/employee/_search
-{
-  "aggs" : {
-    "all_interests" : {
-      "terms" : { 
-        "field" : "interests" 
-      },
-      "aggs" : {
-        "avg_age" : {
-          "avg" : { 
-            "field" : "age" 
+    ```
+    + 搜索指定字段值(加过滤器)
+    ```
+    GET /iflytek/employee/_search
+    {
+      "query" : {
+        "filtered" : {
+          "filter" : {
+            "range" : {
+              "age" : { "gt" : 30 }
+            }
+          },
+          "query" : {
+            "match" : {
+              "last_name" : "smith"
+            }
           }
         }
       }
     }
-  }
-}
-```
+    ```
+    + 全文搜索
+    ```
+    GET /iflytek/employee/_search
+    {
+      "query" : {
+        "match" : {
+          "about" : "rock climbing"
+        }
+      }
+    }
+    ```
+    + 短语搜索(比全文搜索更具有针对性)
+    ```
+    GET /iflytek/employee/_search
+    {
+      "query" : {
+        "match_phrase" : {
+          "about" : "rock climbing"
+        }
+      }
+    }
+    ```
+    + 高亮搜索
+    ```
+    GET /iflytek/employee/_search
+    {
+      "query" : {
+        "match_phrase" : {
+          "about" : "rock climbing"
+        }
+      },
+      "highlight": {
+        "fields" : {
+          "about" : {}
+        }
+      }
+    }
+    ```
+    + 分析(聚合查询)
+    ```
+    GET /iflytek/employee/_search
+    {
+      "aggs": {
+        "all_interests": {
+          "terms": { "field": "interests" }
+        }
+      }
+    }
+    ```
+    + 聚合和精确查询组合
+    ```
+    GET /iflytek/employee/_search
+    {
+      "query": {
+        "match": {
+          "last_name": "smith"
+        }
+      },
+      "aggs": {
+        "all_interests": {
+          "terms": {
+            "field": "interests"
+          }
+        }
+      }
+    }
+    ```
+    + 分级汇总(统计每种兴趣下职员的平均年龄)
+    ```
+    GET /iflytek/employee/_search
+    {
+      "aggs" : {
+        "all_interests" : {
+          "terms" : { 
+            "field" : "interests" 
+          },
+          "aggs" : {
+            "avg_age" : {
+              "avg" : { 
+                "field" : "age" 
+              }
+            }
+          }
+        }
+      }
+    }
+    ```
+    
+#### 6. 分布式特性
++ Elasticsearch可以横向扩展至数百(甚至数千)的服务器节点，同时可以处理PB级数据。Elasticsearch天生就是分布式的，并且在设计时屏蔽了分布式的复杂性
++ Elasticsearch在分布式方面几乎是透明的
+    
+### 二、Elasticsearch分布式
 
-### 六、分布式集群及分布式存储
+#### 1. 集群内的原理
 + 集群健康 `GET /_cluster/health`
 + 创建索引(设置主分片数`number_of_shards`和复制分片数`number_of_replicas`)
 ```
@@ -231,31 +233,15 @@ PUT /website
   }
 }
 ```
-1. `routing`参数
-    + `shard = hash(routing) % number_of_primary_shards` 计算文档属于哪个分片
-    + `get`,`index`,`delete`,`bulk`,`update`,`mget`都可接收一个`routing`参数，它用来自定义文档到分片的映射
-2. `replication`参数
-    + `replication`复制默认的值是`sync`这将导致主分片得到复制分片的成功响应后才返回
-    + 如果你设置`replication`为`async`，请求在主分片上被执行后就会返回给客户端，它依旧会转发请求给复制节点，但你将不知道复制节点成功与否
-    + 上面的这个选项不建议使用，默认的`sync`复制允许Elasticsearch强制反馈传输，`async`复制可能会因为在不等待其它分片就绪的情况下发送过多的请求而使Elasticsearch过载
-3. `consistency`参数
-    + 默认主分片在尝试写入时需要规定数量(quorum)或过半的分片(可以是主节点或复制节点)可用，这是防止数据被写入到错的网络分区
-    + 规定的数量计算公式`int( (primary + number_of_replicas) / 2 ) + 1`
-4. `timeout`参数
-    + 当分片副本不足时Elasticsearch会等待更多的分片出现，默认等待一分钟
-    + 可以设置`timeout`参数让它终止的更早，`100`表示100毫秒，`30s`表示30秒
-+ `update`API接受`routing`,`replication`,`consistency`和`timout`参数
-+ `mget`API的`routing`参数可以被docs中的每个文档设置
-+ `bulk`API还可以在最上层使用`replication`和`consistency`参数，`routing`参数则在每个请求的元数据中使用
 + 手动分配分片所在节点的方式
     1. 关闭分片自动分配所在节点(改为`all`开启)
     ```
     PUT 10.3.172.112:9200/_cluster/settings
     {
       "transient":{
-	    "cluster.routing.allocation.enable":"none"
-	  }
-	}
+        "cluster.routing.allocation.enable":"none"
+      }
+    }
     ```
     2. 移动指定分片到指定节点  
     ```
@@ -273,17 +259,36 @@ PUT /website
       ]
     }
     ```
-    
-### 七、文档相关操作
 
-#### 1. 文档的元数据
+#### 2. 分布式文档存储
+1. `routing`参数
+    + `shard = hash(routing) % number_of_primary_shards` 计算文档属于哪个分片
+    + `get`,`index`,`delete`,`bulk`,`update`,`mget`都可接收一个`routing`参数，它用来自定义文档到分片的映射
+2. `replication`参数
+    + `replication`复制默认的值是`sync`这将导致主分片得到复制分片的成功响应后才返回
+    + 如果你设置`replication`为`async`，请求在主分片上被执行后就会返回给客户端，它依旧会转发请求给复制节点，但你将不知道复制节点成功与否
+    + 上面的这个选项不建议使用，默认的`sync`复制允许Elasticsearch强制反馈传输，`async`复制可能会因为在不等待其它分片就绪的情况下发送过多的请求而使Elasticsearch过载
+3. `consistency`参数
+    + 默认主分片在尝试写入时需要规定数量(quorum)或过半的分片(可以是主节点或复制节点)可用，这是防止数据被写入到错的网络分区
+    + 规定的数量计算公式`int( (primary + number_of_replicas) / 2 ) + 1`
+4. `timeout`参数
+    + 当分片副本不足时Elasticsearch会等待更多的分片出现，默认等待一分钟
+    + 可以设置`timeout`参数让它终止的更早，`100`表示100毫秒，`30s`表示30秒
++ `update`API接受`routing`,`replication`,`consistency`和`timout`参数
++ `mget`API的`routing`参数可以被docs中的每个文档设置
++ `bulk`API还可以在最上层使用`replication`和`consistency`参数，`routing`参数则在每个请求的元数据中使用
+
+    
+### 三、数据输入和输出
+
+#### 1. 文档元数据
 + 一个文档不只有数据，它还包含了元数据(metadata):
 + `_index` 文档存储的地方
 + `_type` 文档代表的对象的类(每个类型type都有自己的映射mapping或者结构定义， 就像传统数据库表中的列一样)
 + `_id` 文档的唯一标识
 + 其它元数据(例版本号`_version`)
 
-#### 2. 新增文档
+#### 2. 索引文档
 + 指定id新增  
 ```
 PUT /website/blog/123
@@ -311,7 +316,7 @@ POST /website/blog/
 
 #### 4. 更新整个文档
 + 文档在Elasticsearch中是不可变的，我们不能修改他们。如果需要更新已存在的文档，可以使用索引文档章节提到的index API重建索引(reindex)
-+ update API似乎允许你修改文档的局部，但事实上Elasticsearch遵循与之前所说完全相同的过程
++ update API似乎允许你修改文档的局部，但事实上Elasticsearch遵循与之前所说完全相同的过程  
 ```
 PUT /website/blog/123
 {
@@ -520,55 +525,58 @@ POST /website/log/_bulk
 + 最佳大小并不是一个固定的数字。它完全取决于你的硬件、你文档的大小和复杂度以及索引和搜索的负载
 + 一个好的批次最好保持在5-15MB大小间
 
-### 八、搜索(基本的工具)
-+ 为了充分挖掘Elasticsearch的潜力，需要理解以下三个概念：
-    1. Mapping: 数据在每个字段中的解释说明
-    2. Analysis: 全文是如何处理的可以被搜索的
-    3. Query DSL: Elasticsearch使用的灵活的、强大的查询语言
-1. 空搜索
-    + `GET /_search`
-    + `GET /_search?timeout=10ms`
-    + 需要注意的是`timeout`不会停止执行查询，它仅仅告诉你目前顺利返回结果的节点然后关闭连接。在后台，其他分片可能依旧执行查询，尽管结果已经被发送
-2. 多索引和多类别
-    + `/_search` 在所有索引的所有类型中搜索
-    + `/gb/_search` 在索引gb的所有类型中搜索
-    + `/gb,us/_search` 在索引gb和us的所有类型中搜索
-    + `/g*,u*/_search` 在以g或u开头的索引的所有类型中搜索
-    + `/gb/user/_search` 在索引gb的类型user中搜索
-    + `/gb,us/user,tweet/_search` 在索引gb和us的类型为user和tweet中搜索
-    + `/_all/user,tweet/_search` 在所有索引的user和tweet中搜索
-3. 分页搜索
-    + `GET /_search?size=5`(`size`默认10)
-    + `GET /_search?size=5&from=5`(`from`跳过开始的结果数，默认0)
-    + 注意深度分页影响性能
-4. 简易搜索
-    + search API有两种
-        1. 简易版的查询字符串(query string)将所有参数通过查询字符串定义
-        2. 使用JSON完整的表示请求体(request body)，这种富搜索语言叫做结构化查询语句(DSL)
-    + 查询字符串搜索对于在命令行下运行点对点(ad hoc)查询特别有用
-        + `GET /_all/tweet/_search?q=tweet:elasticsearch`
-    + `+`前缀表示语句匹配条件必须被满足，`-`前缀表示条件必须不被满足，所有条件如果没有`+`或`-`表示条件是可选的
-        + 条件 `+name:john +tweet:mary` url编码(percent encoding，百分比编码)
-        + `GET /_search?q=%2Bname%3Ajohn+%2Btweet%3Amary` 
-    + 返回包含"mary"字符的所有文档的简单搜索
-        + `GET /_search?q=mary` 
-    + 更复杂的语句
-        + 条件：1.`name`字段包含`mary`或`john` 2.`date`晚于`2014-09-10` 3.`_all`字段包含`aggregations`或`geo`
-        + `+name:(mary john) +date:>2014-09-10 +(aggregations geo)` 
-        + `GET /_search?q=%2Bname%3A(mary+john)+%2Bdate%3A%3E2014-09-10+%2B(aggregations+geo)`
+### 四、搜索(基本的工具)
 
-### 九、映射及分析
+#### 1. 空搜索
++ `GET /_search`
++ `GET /_search?timeout=10ms`
++ 需要注意的是`timeout`不会停止执行查询，它仅仅告诉你目前顺利返回结果的节点然后关闭连接。在后台，其他分片可能依旧执行查询，尽管结果已经被发送
 
-#### 1. Elasticsearch为对字段类型进行猜测，动态生成了字段和类型的映射关系。默认字段`_all`是`string`类型
+#### 2. 多索引和多类型
++ `/_search` 在所有索引的所有类型中搜索
++ `/gb/_search` 在索引gb的所有类型中搜索
++ `/gb,us/_search` 在索引gb和us的所有类型中搜索
++ `/g*,u*/_search` 在以g或u开头的索引的所有类型中搜索
++ `/gb/user/_search` 在索引gb的类型user中搜索
++ `/gb,us/user,tweet/_search` 在索引gb和us的类型为user和tweet中搜索
++ `/_all/user,tweet/_search` 在所有索引的user和tweet中搜索
 
-#### 2. 确切值(Exact values)和全文文本(Full text)
+#### 3. 分页搜索
++ `GET /_search?size=5`(`size`默认10)
++ `GET /_search?size=5&from=5`(`from`跳过开始的结果数，默认0)
++ 注意深度分页影响性能
+    
+#### 4. 轻量搜索
++ search API有两种
+    1. 简易版的查询字符串(query string)将所有参数通过查询字符串定义
+    2. 使用JSON完整的表示请求体(request body)，这种富搜索语言叫做结构化查询语句(DSL)
++ 查询字符串搜索对于在命令行下运行点对点(ad hoc)查询特别有用
+    + `GET /_all/tweet/_search?q=tweet:elasticsearch`
++ `+`前缀表示语句匹配条件必须被满足，`-`前缀表示条件必须不被满足，所有条件如果没有`+`或`-`表示条件是可选的
+    + 条件 `+name:john +tweet:mary` url编码(percent encoding，百分比编码)
+    + `GET /_search?q=%2Bname%3Ajohn+%2Btweet%3Amary` 
++ 返回包含"mary"字符的所有文档的简单搜索
+    + `GET /_search?q=mary` 
++ 更复杂的语句
+    + 条件：1.`name`字段包含`mary`或`john` 2.`date`晚于`2014-09-10` 3.`_all`字段包含`aggregations`或`geo`
+    + `+name:(mary john) +date:>2014-09-10 +(aggregations geo)` 
+    + `GET /_search?q=%2Bname%3A(mary+john)+%2Bdate%3A%3E2014-09-10+%2B(aggregations+geo)`
+
+### 五、映射和分析
+
+#### 1. 确切值(Exact values)和全文(Full text)
++ Elasticsearch中的数据可以概括的分为两类，精确值和全文
++ 精确值如它们听起来那样精确。例如日期或者用户ID，但字符串也可以表示精确值，例如用户名或邮箱地址。对于精确值来讲，`Foo`和`foo`是不同的，`2014`和`2014-09-15`也是不同的
++ 全文是指文本数据(通常以人类容易识别的语言书写)，例如一个推文的内容或一封邮件的内容
++ 精确值很容易查询，结果是二进制的，要么匹配查询，要么不匹配。查询全文数据要微妙的多，我们问的不只是这个文档匹配查询吗，而是该文档匹配查询的程度有多大
+
+#### 2. 倒排索引
 1. 为了方便在全文文本字段中进行这些类型的查询，Elasticsearch首先对文本分析(analyzes)，然后使用结果建立一个倒排索引
 2. Elasticsearch使用一种叫做倒排索引(inverted index)的结构来做快速的全文搜索。倒排索引由在文档中出现的唯一的单词列表，以及对于每个单词在文档中的位置组成
 3. 为了创建倒排索引，我们首先切分每个文档的指定字段为单独的单词(`terms` `tokens`)把所有的唯一词放入列表并排序
 4. 为了找到确实存在于索引中的词，索引文本和查询字符串都要标准化为相同的形式，这个表征化和标准化的过程叫做分词(analysis)
 
-#### 3. 分析和分析器
-+ `GET /iflytek/employee/1/_termvectors?fields=about`(查看指定文档指定字段分词情况)
+#### 3. 分析与分析器
 + 一个分析器(analyzer)只是一个包装用于将三个功能放到一个包里
     1. 字符串经过字符过滤器(character filter)，它们的工作是在表征化前处理字符串。字符过滤器能够去除HTML标记，或者转换 "&" 为 "and" 
     2. 分词器(tokenizer)将字符串表征化为独立的词(断词)。一个简单的分词器(tokenizer)可以根据空格或逗号将单词分开
@@ -580,14 +588,17 @@ POST /website/log/_bulk
     3. 空格分析器(`whitespace`) (Set, the, shape, to, semi-transparent, by, calling, set_trans(5))
     4. 语言分析器(`english`) (set, shape, semi, transpar, call, set_tran, 5)
 + 测试分析器
-    + 指定分词器分词
+    + 查看指定文档指定字段分词情况  
+    `GET /iflytek/employee/1/_termvectors?fields=about`
+    + 指定分词器分词  
     `POST /_analyze?analyzer=standard {"text": "text content"}`
-    + 使用指定字段分词器分词
+    + 使用指定字段分词器分词  
     `POST /iflytek/_analyze?field=about {"text": "text content"}`
 + 指定分析器 当Elasticsearch在你的文档中探测到一个新的字符串字段，它将自动设置它为全文string字段并用standard分析器分析(可以通过映射`mapping`设置)
 
 #### 4. 映射
-1. 核心简单字段类型
+1. Elasticsearch为对字段类型进行猜测，动态生成了字段和类型的映射关系。默认字段`_all`是`string`类型
+2. 核心简单字段类型
 |类型|表示的数据类型|
 |:-:|:-:|
 |String|string|
@@ -595,7 +606,7 @@ POST /website/log/_bulk
 |Floating point|float,double|
 |Boolean|boolean|
 |Date|date|
-2. 当你索引一个包含新字段的文档，一个之前没有的字段，Elasticsearch将使用动态映射猜测字段类型，这类型来自于JSON的基本数据类型，使用以下规则
+3. 当你索引一个包含新字段的文档，一个之前没有的字段，Elasticsearch将使用动态映射猜测字段类型，这类型来自于JSON的基本数据类型，使用以下规则
 |JSON type|Field type|
 |:-:|:-:|
 |Boolean: true or false|boolean|
@@ -603,10 +614,10 @@ POST /website/log/_bulk
 |Floating point: 123.45|double|
 |String, valid date: "2014-09-15"|date|
 |String: "foo bar"|string|
-3. 查看映射
+4. 查看映射
     + `GET /gb/_mapping/tweet`
     + `GET /gb/_mapping`
-4. 自定义字段映射
+5. 自定义字段映射
     + 其它类型(`index`可设置`not_analyzed` `no`)
     ```
     {
@@ -637,76 +648,76 @@ POST /website/log/_bulk
         + 可以向已有映射中增加字段，但不能修改它。如果一个字段在映射中已经存在，这可能意味着那个字段的数据已经被索引。如果改变了字段映射，那已经被索引的数据将错误并且不能被正确的搜索到
         + 可以更新一个映射来增加一个新字段，但是不能把已有字段的类型那个从analyzed改到not_analyzed
         + 可以通使用analyze API测试字符串字段的映射(使用指定字段的分词设置)   
-5. 符合核心字段类型
-    1. 多值字段
-        + 数组中所有值必须为同一类型
-        + 创建一个新字段，这个字段索引了一个数组，Elasticsearch将使用第一个值的类型来确定这个新字段的类型
-    2. 空字段(这四个字段将被识别为空字段而不被索引)
-    ```
-    "empty_string": "",
-    "null_value": null,
-    "empty_array": [],
-    "array_with_null_value": [null]
-    ```
-    3. 多层对象 Elasticsearch会动态的检测新对象的字段，并且映射它们为`object`类型，将每个字段加到`properties`字段下
-        + json对象
-        ```
-        {
-          "tweet": "Elasticsearch is very flexible",
-          "user": {
-            "id": "@johnsmith",
-            "gender": "male",
-            "age": 26,
+
+#### 5. 复杂核心域类型
+1. 多值域
+    + 数组中所有值必须为同一类型
+    + 创建一个新字段，这个字段索引了一个数组，Elasticsearch将使用第一个值的类型来确定这个新字段的类型
+2. 空域(这四个字段将被识别为空字段而不被索引)
+```
+"empty_string": "",
+"null_value": null,
+"empty_array": [],
+"array_with_null_value": [null]
+```
+3. 多层级对象
+```
+{
+  "tweet": "Elasticsearch is very flexible",
+  "user": {
+    "id": "@johnsmith",
+    "gender": "male",
+    "age": 26,
+    "name": {
+      "full": "John Smith",
+      "first": "John",
+      "last": "Smith"
+    }
+  }
+}
+```
+4. 内部对象的映射(Elasticsearch会动态的检测新对象的字段，并且映射它们为`object`类型，将每个字段加到`properties`字段下)
+```
+{
+  "gb": {
+    "tweet": {
+      "properties": {
+        "tweet": { "type": "string" },
+        "user": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },                      
+            "gender": { "type": "string" },
+            "age": { "type": "long" },
             "name": {
-              "full": "John Smith",
-              "first": "John",
-              "last": "Smith"
-            }
-          }
-        }
-        ```
-        + mapping映射
-        ```
-        {
-          "gb": {
-            "tweet": {
+              "type": "object",
               "properties": {
-                "tweet": { "type": "string" },
-                "user": {
-                  "type": "object",
-                  "properties": {
-                    "id": { "type": "string" },                      
-                    "gender": { "type": "string" },
-                    "age": { "type": "long" },
-                    "name": {
-                      "type": "object",
-                      "properties": {
-                        "full": { "type": "string" },
-                        "first": { "type": "string" },
-                        "last": { "type": "string" }
-                      }
-                    }
-                  }
-                }
+                "full": { "type": "string" },
+                "first": { "type": "string" },
+                "last": { "type": "string" }
               }
             }
           }
         }
-        ```
-        + 内部对象是怎样被索引的
-        ```
-        {
-          "tweet": [elasticsearch, flexible, very],
-          "user.id": [@johnsmith],
-          "user.gender": [male],
-          "user.age": [26],
-          "user.name.full": [john, smith],
-          "user.name.first": [john],
-          "user.name.last": [smith]
-        }
-        ```
-        + 内部对象数组是怎样被索引的
-        ```
-        {"followers":[{"age":35,"name":"Mary White"},{"age":26,"name":"Alex Jones"},{"age":19,"name":"Lisa Smith"}]
-        "followers.age": [19, 26, 35], "followers.name": [alex, jones, lisa, smith, mary, white]
-        ```
+      }
+    }
+  }
+}
+```
+5. 内部对象是如何索引的
+```
+{
+  "tweet": [elasticsearch, flexible, very],
+  "user.id": [@johnsmith],
+  "user.gender": [male],
+  "user.age": [26],
+  "user.name.full": [john, smith],
+  "user.name.first": [john],
+  "user.name.last": [smith]
+}
+```
+6. 内部对象数组是如何索引的(扁平化处理)
+```
+{"followers":[{"age":35,"name":"Mary White"},{"age":26,"name":"Alex Jones"},{"age":19,"name":"Lisa Smith"}]
+"followers.age": [19, 26, 35], "followers.name": [alex, jones, lisa, smith, mary, white]
+```
