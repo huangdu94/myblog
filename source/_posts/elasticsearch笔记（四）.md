@@ -1,7 +1,7 @@
 ---
 title: Elasticsearch笔记（四）
 date: 2020/02/05
-updated: 2020/02/05
+updated: 2020/02/06
 comments: true
 categories: 
 - [笔记, database, elasticsearch]
@@ -431,3 +431,349 @@ GET /my_index/my_type/_search
 	+ Elasticsearch会基于使用频次自动缓存查询。如果一个非评分查询在最近的256次查询中被使用过(次数取决于查询类型)，那么这个查询就会作为缓存的候选
 	+ 但是，并不是所有的片段都能保证缓存bitset。只有那些文档数量超过10000(或超过总文档数量的3%)才会缓存bitset。因为小的片段可以很快的进行搜索和合并，这里缓存的意义不大
 	+ 一旦缓存了，非评分计算的bitset会一直驻留在缓存中直到它被剔除。剔除规则是基于LRU的：一旦缓存满了，最近最少使用的过滤器会被剔除
+	
+### 十二、全文搜索
+
+#### 1. 全文搜索两个重要方面
+1. 相关性(Relevance) 
+它是评价查询与其结果间的相关程度，并根据这种相关程度对结果排名的一种能力，这种计算方式可以是TF/IDF方法、地理位置邻近、模糊相似，或其他的某些算法
+2. 分析(Analysis)  
+它是将文本块转换为有区别的、规范化的token的一个过程，目的是为了创建倒排索引以及查询倒排索引
++ 一旦谈论相关性或分析这两个方面的问题时，我们所处的语境是关于查询的而不是过滤
+
+#### 2. 基于词项与基于全文
+1. 基于词项的查询  
+如`term`或`fuzzy`这样的底层查询不需要分析阶段，它们对单个词项进行操作。用`term`查询词项`Foo`只要在倒排索引中查找准确词项，并且用TF/IDF算法为每个包含该词项的文档计算相关度评分`_score`
+2. 基于全文的查询  
+像`match`或`query_string`这样的查询是高层查询，它们了解字段映射的信息
+	+ 如果查询日期(date)或整数(integer)字段，它们会将查询字符串分别作为日期或整数对待
+	+ 如果查询一个(not_analyzed)未分析的精确值字符串字段，它们会将整个查询字符串作为单个词项对待
+	+ 但如果要查询一个(analyzed)已分析的全文字段，它们会先将查询字符串传递到一个合适的分析器，然后生成一个供查询的词项列表
++ 一旦组成了词项列表，这个查询会对每个词项逐一执行底层的查询，再将结果合并，然后为每个文档生成一个最终的相关度评分
++ 当我们想要查询一个具有精确值的`not_analyzed`未分析字段之前，需要考虑，是否真的采用评分查询，或者非评分查询会更好
++ 单词项查询通常可以用是、非这种二元问题表示，所以更适合用过滤，而且这样做可以有效利用缓存
+```
+GET /_search
+{
+  "query": {
+    "constant_score": {
+      "filter": {
+        "term": { "gender": "female" }
+      }
+    }
+  }
+}
+```
+
+#### 3. 匹配查询
+1. 索引一些数据(只设置一个主分片，防止在数据量少的时候发生相关性破坏)
+```
+DELETE /my_index
+
+PUT /my_index
+{ "settings": { "number_of_shards": 1 }}
+
+POST /my_index/my_type/_bulk
+{ "index": { "_id": 1 }}
+{ "title": "The quick brown fox" }
+{ "index": { "_id": 2 }}
+{ "title": "The quick brown fox jumps over the lazy dog" }
+{ "index": { "_id": 3 }}
+{ "title": "The quick brown fox jumps over the quick dog" }
+{ "index": { "_id": 4 }}
+{ "title": "Brown fox brown dog" }
+```
+2. 单个词查询
+```
+GET /my_index/my_type/_search
+{
+  "query": {
+    "match": {
+      "title": "QUICK!"
+    }
+  }
+}
+```
++ Elasticsearch执行上面这个`match`查询的步骤是
+	1. 检查字段类型  
+	标题`title`字段是一个`string`类型(analyzed)已分析的全文字段，这意味着查询字符串本身也应该被分析
+	2. 分析查询字符串  
+	将查询的字符串`QUICK!`传入标准分析器中，输出的结果是单个项`quick`。因为只有一个单词项，所以`match`查询执行的是单个底层`term`查询
+	3. 查找匹配文档  
+	用`term`查询在倒排索引中查找`quick`然后获取一组包含该项的文档，本例的结果是文档：1、2和3
+	4. 为每个文档评分  
+	用`term`查询计算每个文档相关度评分`_score`，这是种将词频(词quick在相关文档的title字段中出现的频率)和反向文档频率(词quick在所有文档的title字段中出现的频率)，以及字段的长度(即字段越短相关度越高)相结合的计算方式
+
+#### 4. 多词查询
+1. `match`多词查询
+```
+GET /my_index/my_type/_search
+{
+  "query": {
+    "match": {
+      "title": "BROWN DOG!"
+    }
+  }
+}
+```
+2. 提高精度  
+`match`查询还可以接受`operator`操作符作为输入参数，默认情况下该操作符是`or`。我们可以将它修改成`and`让所有指定词项都必须匹配
+```
+GET /my_index/my_type/_search
+{
+  "query": {
+    "match": {
+      "title": {
+        "query":    "BROWN DOG!",
+        "operator": "and"
+      }
+    }
+  }
+}
+```
+3. 控制精度  
+`match`查询支持`minimum_should_match`最小匹配参数，可以指定必须匹配的词项数。可以将其设置为某个具体数字，更常用的做法是将其设置为一个百分数
+```
+GET /my_index/my_type/_search
+{
+  "query": {
+    "match": {
+      "title": {
+        "query":                "quick brown dog",
+        "minimum_should_match": "75%"
+      }
+    }
+  }
+}
+```
+
+#### 5. 组合查询
++ 在组合过滤器中，`bool`过滤器通过`and`、`or`和`not`逻辑组合将多个过滤器进行组合。在查询中，`bool`查询有类似的功能
++ 与过滤器一样，`bool`查询也可以接受`must`、`must_not`和`should`参数下的多个查询语句
+```
+GET /my_index/my_type/_search
+{
+  "query": {
+    "bool": {
+      "must":     { "match": { "title": "quick" }},
+      "must_not": { "match": { "title": "lazy"  }},
+      "should": [
+                  { "match": { "title": "brown" }},
+                  { "match": { "title": "dog"   }}
+      ]
+    }
+  }
+}
+```
++ 评分计算
+	+ `bool`查询会为每个文档计算相关度评分`_score`，再将所有匹配的`must`和`should`语句的分数`_score`求和，最后除以`must`和`should`语句的总数
+	+ `must_not`语句不会影响评分，它的作用只是将不相关的文档排除
+	+ 默认情况下，没有`should`语句是必须匹配的。只有一个例外，那就是当没有`must`语句的时候，至少有一个`should`语句必须匹配
++ 控制精度  
+通过`minimum_should_match`参数控制需要匹配的`should`语句的数量，它既可以是一个绝对的数字，又可以是个百分比
+```
+GET /my_index/my_type/_search
+{
+  "query": {
+    "bool": {
+      "should": [
+        { "match": { "title": "brown" }},
+        { "match": { "title": "fox"   }},
+        { "match": { "title": "dog"   }}
+      ],
+      "minimum_should_match": 2
+    }
+  }
+}
+```
+
+#### 6. 如何使用布尔匹配
++ 多词`match`查询只是简单地将生成的`term`查询包裹在一个`bool`查询中
+1. 使用默认的`or`操作符，每个`term`查询都被当作`should`语句，这样就要求必须至少匹配一条语句
+```
+{
+  "match": { "title": "brown fox"}
+}
+{
+  "bool": {
+    "should": [
+      { "term": { "title": "brown" }},
+      { "term": { "title": "fox"   }}
+    ]
+  }
+}
+```
+2. 使用`and`操作符，所有的`term`查询都被当作`must`语句，所以所有(all)语句都必须匹配
+```
+{
+  "match": {
+    "title": {
+      "query":    "brown fox",
+      "operator": "and"
+    }
+  }
+}
+{
+  "bool": {
+    "must": [
+      { "term": { "title": "brown" }},
+      { "term": { "title": "fox"   }}
+    ]
+  }
+}
+```
+3. 如果指定参数`minimum_should_match`，它可以通过`bool`查询直接传递，使以下两个查询等价
+```
+{
+  "match": {
+    "title": {
+      "query":                "quick brown fox",
+      "minimum_should_match": "75%"
+    }
+  }
+}
+{
+  "bool": {
+    "should": [
+      { "term": { "title": "brown" }},
+      { "term": { "title": "fox"   }},
+      { "term": { "title": "quick" }}
+    ],
+    "minimum_should_match": 2
+  }
+}
+```
++ 通常将这些查询用`match`查询来表示，但是如果了解`match`内部的工作原理，就能根据自己的需要来控制查询过程。有些时候单个`match`查询无法满足需求，比如为某些查询条件分配更高的权重
+
+#### 7. 查询语句提升权重
+1. `bool`查询
+```
+GET /_search
+{
+  "query": {
+    "bool": {
+      "must": {
+        "match": {
+          "content": {
+            "query":    "full text search",
+            "operator": "and"
+          }
+        }
+      },
+      "should": [
+        { "match": { "content": "Elasticsearch" }},
+        { "match": { "content": "Lucene"        }}
+      ]
+    }
+  }
+}
+```
+2. 让包含`Lucene`的有更高的权重，并且包含`Elasticsearch`的语句比`Lucene`的权重更高
+```
+GET /_search
+{
+  "query": {
+    "bool": {
+      "must": {
+        "match": {
+          "content": {
+            "query":    "full text search",
+            "operator": "and"
+          }
+        }
+      },
+      "should": [
+        { "match": {
+          "content": {
+            "query": "Elasticsearch",
+            "boost": 3
+          }
+        }},
+        { "match": {
+          "content": {
+            "query": "Lucene",
+            "boost": 2
+          }
+        }}
+      ]
+    }
+  }
+}
+```
+3. `boost`参数被用来提升一个语句的相对权重(`boost`值大于1)或降低相对权重(`boost`值处于0到1之间)，但是这种提升或降低并不是线性的，如果一个`boost`值为2，并不能获得两倍的评分`_score`
+4. 如果不基于TF/IDF要实现自己的评分模型，我们就需要对权重提升的过程能有更多控制，可以使用`function_score`查询操纵一个文档的权重提升方式而跳过归一化这一步骤
+
+#### 8. 控制分析
++ 查询只能查找倒排索引表中真实存在的项，所以保证文档在索引时与查询字符串在搜索时应用相同的分析过程非常重要，这样查询的项才能够匹配倒排索引中的项
++ 为`my_index`新增一个字段
+```
+PUT /my_index/_mapping/my_type
+{
+  "my_type": {
+    "properties": {
+      "english_title": {
+        "type":     "string",
+        "analyzer": "english"
+      }
+    }
+  }
+}
+```
++ 通过使用`analyze`API来分析单词`Foxes`，进而比较`english_title`字段和`title`字段在索引时的分析结果
+```
+GET /my_index/_analyze
+{
+  "field": "my_type.title",
+  "text": "Foxes"
+}
+
+GET /my_index/_analyze
+{
+  "field": "my_type.english_title",
+  "text": "Foxes"
+}
+```
++ 也可以通过`validate-query`API查看这个行为
+```
+GET /my_index/my_type/_validate/query?explain
+{
+  "query": {
+    "bool": {
+      "should": [
+        { "match": { "title":         "Foxes"}},
+        { "match": { "english_title": "Foxes"}}
+      ]
+    }
+  }
+}
+```
++ 默认分析器
+	+ Elasticsearch会按照以下顺序依次处理，直到它找到能够使用的分析器，索引时的顺序如下
+		1. 字段映射里定义的`analyzer`
+		2. 索引设置中名为`default`的分析器
+		3. 默认为`standard`标准分析器
+	+ 在搜索时，顺序有些许不同
+		1. 查询自己定义的`analyzer`
+		2. 字段映射里定义的`analyzer`
+		3. 索引设置中名为`default`的分析器
+		4. 默认为`standard`标准分析器
+	+ 考虑额外参数，一个搜索时的完整顺序会是下面这样
+		1. 查询自己定义的`analyzer`
+		2. 字段映射里定义的`search_analyzer`
+		3. 字段映射里定义的`analyzer`
+		4. 索引设置中名为`default_search`的分析器
+		5. 索引设置中名为`default`的分析器
+		6. 默认为`standard`标准分析器
++ 分析器配置实践  
+	+ 多数字符串字段都是`not_analyzed`精确值字段，比如标签(tag)或枚举(enum)，而且更多的全文字段会使用默认的`standard`分析器或`english`或其他某种语言的分析器
+	+ 这样只需要为少数一两个字段指定自定义分析：或许标题`title`字段需要以支持输入即查找(find-as-you-type)的方式进行索引
+	+ 可以在索引级别设置中，为绝大部分的字段设置你想指定的`default`默认分析器。然后在字段级别设置中，对某一两个字段配置需要指定的分析器
+
+#### 9. 被破坏的相关度！
++ 由于性能原因，Elasticsearch不会计算索引内所有文档的IDF。相反，每个分片会根据该分片内的所有文档计算一个本地IDF
++ 因为文档是均匀分布存储的，两个分片的IDF是相同的。如果数据在一个分片里非常普通(所以不那么重要)，但是在另一个分片里非常出现很少(所以会显得更重要)。这些IDF之间的差异会导致不正确的结果
++ 在实际应用中，这并不是一个问题，本地和全局的IDF的差异会随着索引里文档数的增多渐渐消失，在真实世界的数据量下，局部的IDF会被迅速均化，所以上述问题并不是相关度被破坏所导致的，而是由于数据太少
++ 数据量少的测试环境，可以通过两种方式解决这个问题
+	1. 只在主分片上创建索引，如果只有一个主分片，那么本地的IDF就是全局的IDF
+	2. 在搜索请求后添加`?search_type=dfs_query_then_fetch`，`dfs`是指分布式频率搜索，它告诉Elasticsearch先分别获得每个分片本地的IDF，然后根据结果再计算整个索引的全局IDF
++ 不要在生产环境上使用`dfs_query_then_fetch`。完全没有必要，只要有足够的数据就能保证词频是均匀分布的。没有理由给每个查询额外加上DFS这步
